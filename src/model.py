@@ -343,38 +343,64 @@ def gcva_loss(
     outputs: dict,
     y: torch.Tensor,
     criterion,
-    mu_aux: float = 0.3,
-    mu_unc: float = 0.1,
-    mu_gate: float = 0.05,
+    lambda1: float = 0.5,
+    lambda2: float = 0.25,
 ) -> tuple:
     """
-    Composite GCVA loss:
-        L = L_main + μ₁·L_aux + μ₂·L_unc + μ₃·L_gate
+    Composite GCVA loss (paper Eq. 7):
 
-    - L_main : binary cross-entropy on the fused prediction.
-    - L_aux  : mean auxiliary BCE loss across the three view-specific heads.
-    - L_unc  : MAE between predicted uncertainty and observed per-view squared error
-               (encourages calibrated uncertainty estimates).
-    - L_gate : gate regularisation  g_v·(1-g_v) encourages binary (decisive) gates.
+        L = L_main + λ₁·L_unc + λ₂·L_gate
+
+    Components:
+
+    L_main (Eq. 7): Binary cross-entropy on the fused prediction.
+        L_main = BCE(ŷ, y)
+
+    L_unc (Eq. 8): Attenuated uncertainty loss — Kendall & Gal (2017).
+    For each view v, the per-sample BCE is divided by the estimated variance
+    σ_v² and the log-variance is added as a regulariser:
+
+        L_unc = (1/M) Σ_v [ BCE_sample(ŷ_v, y) / σ_v²  +  log(σ_v²) ]
+
+    BCE_sample(ŷ_v, y) is computed per-sample (reduction='none') so that
+    each sample's loss is independently attenuated by its view's variance.
+    This down-weights the gradient for high-uncertainty views and prevents
+    the model from predicting infinite variance (log term).
+
+    L_gate (Eq. 9): Gate polarisation regulariser.
+        L_gate = (1/M) Σ_v  g_v · (1 − g_v)
+    Encourages gates toward 0 or 1 (decisive suppression or full trust).
 
     Args:
-        outputs (dict): GCVA.forward() output dictionary.
+        outputs (dict): GCVA.forward() output dictionary.  Must contain keys:
+            'logits'       : (B,)   — fused prediction logit.
+            'aux_logits'   : (B, M) — per-view prediction logits.
+            'uncertainties': (B, M) — per-view estimated variance σ_v².
+            'gates'        : (B, M) — per-view reliability gates g_v.
         y (torch.Tensor): Ground-truth binary labels (B,).
-        criterion: BCEWithLogitsLoss instance (with optional pos_weight).
-        mu_aux, mu_unc, mu_gate (float): Loss weighting coefficients.
+        criterion: BCEWithLogitsLoss instance (pos_weight handled inside).
+            Used only for L_main; L_unc uses reduction='none' internally.
+        lambda1 (float): Weight for L_unc (paper optimal: 0.50).
+        lambda2 (float): Weight for L_gate (paper optimal: 0.25).
 
     Returns:
-        tuple: (L_total, L_main.item(), L_aux.item(), L_unc.item(), L_gate.item())
+        tuple: (L_total, L_main.item(), L_unc.item(), L_gate.item())
     """
+    # --- L_main: BCE on fused prediction ---
     L_main = criterion(outputs["logits"], y)
-    L_aux = (
-        criterion(outputs["aux_logits"][:, 0], y)
-        + criterion(outputs["aux_logits"][:, 1], y)
-        + criterion(outputs["aux_logits"][:, 2], y)
-    ) / 3.0
-    aux_probs = torch.sigmoid(outputs["aux_logits"])
-    errors = (aux_probs - y.unsqueeze(1)).pow(2)
-    L_unc = (outputs["uncertainties"] - errors).abs().mean()
-    L_gate = (outputs["gates"] * (1 - outputs["gates"])).mean()
-    L_total = L_main + mu_aux * L_aux + mu_unc * L_unc + mu_gate * L_gate
-    return L_total, L_main.item(), L_aux.item(), L_unc.item(), L_gate.item()
+
+    # --- L_unc: attenuated per-view BCE (paper Eq. 8) ---
+    # BCEWithLogitsLoss per sample, no reduction, no pos_weight bias for unc term
+    bce_none = F.binary_cross_entropy_with_logits(
+        outputs["aux_logits"],          # (B, M)
+        y.unsqueeze(1).expand_as(outputs["aux_logits"]),  # (B, M)
+        reduction="none",
+    )                                   # (B, M)
+    sigma2 = outputs["uncertainties"]   # (B, M), strictly > 0 (softplus + ε)
+    L_unc = (bce_none / sigma2 + torch.log(sigma2)).mean()
+
+    # --- L_gate: polarisation regulariser (paper Eq. 9) ---
+    L_gate = (outputs["gates"] * (1.0 - outputs["gates"])).mean()
+
+    L_total = L_main + lambda1 * L_unc + lambda2 * L_gate
+    return L_total, L_main.item(), L_unc.item(), L_gate.item()

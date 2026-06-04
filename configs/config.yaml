@@ -47,9 +47,8 @@ fusion_params:
   temporal_bidirectional: true
   temporal_dropout: 0.1
   tau: 1.0
-  mu_aux: 0.3
-  mu_unc: 0.1
-  mu_gate: 0.05
+  lambda1: 0.50   # L_unc weight (paper Eq. 7 / sensitivity analysis)
+  lambda2: 0.25   # L_gate weight (paper Eq. 7 / sensitivity analysis)
 
 training_params:
   epochs: 100

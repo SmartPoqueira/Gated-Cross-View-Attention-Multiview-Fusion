@@ -183,9 +183,8 @@ def main() -> None:
 
     total_epochs = int(cfg["training_params"]["epochs"])
     patience     = int(cfg["training_params"]["patience"])
-    mu_aux  = float(cfg["fusion_params"].get("mu_aux", 0.3))
-    mu_unc  = float(cfg["fusion_params"].get("mu_unc", 0.1))
-    mu_gate = float(cfg["fusion_params"].get("mu_gate", 0.05))
+    lambda1 = float(cfg["fusion_params"].get("lambda1", 0.5))   # L_unc weight (paper: 0.50)
+    lambda2 = float(cfg["fusion_params"].get("lambda2", 0.25))  # L_gate weight (paper: 0.25)
 
     best_val = float("inf")
     best_path = os.path.join(cfg["output_dir"], "best_model.pth")
@@ -203,7 +202,7 @@ def main() -> None:
             G, tab, seq, y = G.to(device), tab.to(device), seq.to(device), y.to(device)
             optimizer.zero_grad()
             out = model(G, tab, seq)
-            loss, *_ = gcva_loss(out, y, criterion, mu_aux, mu_unc, mu_gate)
+            loss, *_ = gcva_loss(out, y, criterion, lambda1, lambda2)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
             optimizer.step()
@@ -222,7 +221,7 @@ def main() -> None:
             for G, tab, seq, y in val_loader:
                 G, tab, seq, y = G.to(device), tab.to(device), seq.to(device), y.to(device)
                 out = model(G, tab, seq)
-                loss_val, *_ = gcva_loss(out, y, criterion, mu_aux, mu_unc, mu_gate)
+                loss_val, *_ = gcva_loss(out, y, criterion, lambda1, lambda2)
                 v_total += float(loss_val.item())
                 p = torch.sigmoid(out["logits"].view(-1))
                 v_probs.extend(p.cpu().numpy().tolist())
