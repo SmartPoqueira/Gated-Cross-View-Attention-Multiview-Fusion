@@ -12,7 +12,11 @@ In real-world IoT systems, data arrives from multiple heterogeneous sources with
 4. **Weighted fusion** — Final representation is a softmax-weighted sum of attended view embeddings.
 
 
-![GCVA Architecture](images/architecture.png)
+<p align="center">
+  <img src="images/architecture.png" width="750"/>
+</p>
+
+*GCVA fusion mechanism. The model processes heterogeneous input views by first estimating their individual uncertainty (σ²) via the Confidence-Aware Gating Mechanism. These estimates generate reliability gates (g_v) that dynamically modulate attention scores, lowering the contribution of noisy views before the final weighted fusion.*
 
 ## Method
 
@@ -39,6 +43,28 @@ Binary classification (repeater vs. non-repeater) on IoT vehicle data:
 | Late Fusion (concat) | 0.74 | 0.72 | 0.73 | 0.81 |
 | Gated Multimodal Unit | 0.76 | 0.74 | 0.75 | 0.83 |
 | **GCVA (Ours)** | **0.81** | **0.78** | **0.79** | **0.87** |
+
+<p align="center">
+  <img src="images/results.png" width="700"/>
+</p>
+
+*Weighted F1-score distributions for different fusion strategies and view combinations using 5-fold cross-validation.*
+
+### Gate Correlation Analysis
+
+<p align="center">
+  <img src="images/gate_correlation.png" width="700"/>
+</p>
+
+*Correlation between learned gate values (g_v) and view prediction errors — confirming that the gating mechanism correctly suppresses less reliable views.*
+
+### Sensitivity Analysis
+
+<p align="center">
+  <img src="images/sensitivity.png" width="700"/>
+</p>
+
+*Sensitivity analysis of GCVA loss hyperparameters (λ₁ and λ₂).*
 
 ## Project Structure
 
