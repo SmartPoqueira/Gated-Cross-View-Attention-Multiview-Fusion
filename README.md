@@ -157,7 +157,7 @@ python -m src.training  # requires data configured in configs/config.yaml
 
 ## Citation
 
-This repository is published under CC BY 4.0. If you use this code, you **must** cite the paper:
+This repository is published under CC BY 4.0. If you use this code, please cite the paper:
 
 ```bibtex
 @article{duran2026gcva,
