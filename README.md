@@ -11,6 +11,9 @@ In real-world IoT systems, data arrives from multiple heterogeneous sources with
 3. **Gating cross-attention** — Attention scores between views are modulated by the product of their gate values: $\text{score}_{ij} = (Q_i K_j^T / \sqrt{d}) \cdot g_i \cdot g_j$.
 4. **Weighted fusion** — Final representation is a softmax-weighted sum of attended view embeddings.
 
+
+![GCVA Architecture](images/architecture.png)
+
 ## Method
 
 The GCVA model has four stages:

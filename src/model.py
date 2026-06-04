@@ -372,7 +372,7 @@ def save_training_curves(train_losses, val_losses, val_f1s, out_dir):
 
 # --- NUEVAS FUNCIONES DE PLOTEO ---
 def plot_fusion_weights_violin(all_weights, output_dir, view_names=['Graph', 'Tabular', 'Temporal']):
-    """Opción A: Genera Violin Plot de los pesos de fusión."""
+    """Option A: Generate Violin Plot of fusion weights."""
     df_w = pd.DataFrame(all_weights, columns=view_names)
     df_melt = df_w.melt(var_name='View', value_name='Attention Weight')
     
@@ -388,12 +388,12 @@ def plot_fusion_weights_violin(all_weights, output_dir, view_names=['Graph', 'Ta
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "fusion_weights_violinplot.png"), dpi=300)
     plt.close()
-    print("   ✓ Violin Plot de pesos de fusión guardado.")
+    print("   ✓ Fusion weight violin plot saved.")
 
 def plot_fusion_weights_ternary(all_weights, output_dir, view_names=['Graph', 'Tabular', 'Temporal']):
     ensure_dir(output_dir)
     if all_weights.shape[1] != 3:
-        print("   ⚠ El Ternary Plot solo es para 3 vistas. Saltando.")
+        print("   ⚠ Ternary plot requires exactly 3 views. Skipping.")
         return
     
     df_w = pd.DataFrame(all_weights, columns=view_names)
@@ -419,19 +419,19 @@ def plot_fusion_weights_ternary(all_weights, output_dir, view_names=['Graph', 'T
     
     try:
         pio.write_image(fig, os.path.join(output_dir, "fusion_weights_ternaryplot.png"), scale=3)
-        print("   ✓ Ternary Plot guardado (PNG).")
+        print("   ✓ Ternary plot saved (PNG).")
     except Exception as e:
-        print(f"   ⚠ Fallo al guardar PNG estático: {e}. Guardando HTML...")
+        print(f"   ⚠ Failed to save static PNG: {e}. Saving HTML...")
         fig.write_html(os.path.join(output_dir, "fusion_weights_ternaryplot.html"))
-        print("   ✓ Ternary Plot guardado (HTML).")
+        print("   ✓ Ternary plot saved (HTML).")
 
 
 def main():
     print("\n" + "="*80)
-    print("INICIANDO ENTRENAMIENTO GCVA")
+    print("STARTING GCVA TRAINING")
     print("="*80 + "\n")
-    
-    print("[1/10] Cargando configuración...")
+
+    print("[1/10] Loading configuration...")
     cfg = read_yaml("config/config_three_gcva.yaml")
     if 'tabular_features' not in cfg and 'tab_features' in cfg:
         cfg['tabular_features'] = cfg.pop('tab_features')
@@ -441,7 +441,7 @@ def main():
     require_keys(cfg['tab_model_params'], ['hidden_dim'], 'tab_model_params')
     require_keys(cfg['temporal_params'], ['window'], 'temporal_params')
     require_keys(cfg['training_params'], ['epochs','learning_rate','batch_size','patience'], 'training_params')
-    print("   ✓ Configuración cargada correctamente")
+    print("   ✓ Configuration loaded successfully")
 
     seed = int(cfg['seed']); set_deterministic_seed(seed)
     ensure_dir(cfg['output_dir'])
@@ -449,7 +449,7 @@ def main():
     print(f"   ✓ Device: {device}")
     print(f"   ✓ Seed: {seed}")
 
-    print("\n[2/10] Cargando datasets...")
+    print("\n[2/10] Loading datasets...")
     ds = ThreeViewsDataset(
         graphs_csv=cfg['csv_paths']['graphs'],
         tabular_csv=cfg['csv_paths']['tabular'],
@@ -458,11 +458,11 @@ def main():
         tab_features=cfg['tabular_features'],
         window=int(cfg['temporal_params']['window'])
     )
-    print(f"   ✓ Total muestras: {len(ds)}")
-    print(f"   ✓ Nodos únicos: {len(ds.node_mapping)}")
-    print(f"   ✓ Features tabulares: {len(cfg['tabular_features'])}")
+    print(f"   ✓ Total samples: {len(ds)}")
+    print(f"   ✓ Unique nodes: {len(ds.node_mapping)}")
+    print(f"   ✓ Tabular features: {len(cfg['tabular_features'])}")
 
-    print("\n[3/10] Generando splits por vehículo...")
+    print("\n[3/10] Generating vehicle-based splits...")
     plates = ds.df['num_plate'].tolist()
     uniq = np.array(sorted(set(plates)))
     rng = np.random.RandomState(seed); rng.shuffle(uniq)
@@ -474,20 +474,20 @@ def main():
     val_idx   = [i for i in idx_all if plates[i] in val_ids]
     test_idx  = [i for i in idx_all if plates[i] in test_ids]
     if len(train_idx)==0 or len(val_idx)==0 or len(test_idx)==0:
-        raise ValueError("Particiones vacías")
-    print(f"   ✓ Train: {len(train_idx)} muestras ({len(train_ids)} vehículos)")
-    print(f"   ✓ Val:   {len(val_idx)} muestras ({len(val_ids)} vehículos)")
-    print(f"   ✓ Test:  {len(test_idx)} muestras ({len(test_ids)} vehículos)")
+        raise ValueError("Empty partitions")
+    print(f"   ✓ Train: {len(train_idx)} samples ({len(train_ids)} vehicles)")
+    print(f"   ✓ Val:   {len(val_idx)} samples ({len(val_ids)} vehicles)")
+    print(f"   ✓ Test:  {len(test_idx)} samples ({len(test_ids)} vehicles)")
 
-    print("\n[4/10] Normalizando features tabulares...")
+    print("\n[4/10] Normalising tabular features...")
     cols = list(cfg['tabular_features'])
     m = ds.df.loc[train_idx, cols].mean()
     s = ds.df.loc[train_idx, cols].std().replace(0, 1e-6)
     ds.df.loc[:, cols] = (ds.df[cols] - m) / s
     ds.df.loc[:, cols] = ds.df[cols].fillna(0.0)
-    print("   ✓ Normalización completada")
+    print("   ✓ Normalisation complete")
 
-    print("\n[5/10] Creando dataloaders...")
+    print("\n[5/10] Creating dataloaders...")
     train_set = torch.utils.data.Subset(ds, train_idx)
     val_set   = torch.utils.data.Subset(ds, val_idx)
     test_set  = torch.utils.data.Subset(ds, test_idx)
@@ -500,17 +500,17 @@ def main():
     print(f"   ✓ Val batches:   {len(val_loader)}")
     print(f"   ✓ Test batches:  {len(test_loader)}")
 
-    print("\n[6/10] Construyendo modelo GCVA...")
+    print("\n[6/10] Building GCVA model...")
     node_feat_dim = len(ds.node_mapping)+1
     edge_feat_dim = 1
     tab_in = len(cols)
     model = GCVA(node_feat_dim, edge_feat_dim, tab_in, cfg['gnn_model_params'], cfg['tab_model_params'], cfg['fusion_params']).to(device)
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"   ✓ Parámetros totales: {total_params:,}")
-    print(f"   ✓ Parámetros entrenables: {trainable_params:,}")
+    print(f"   ✓ Total parameters: {total_params:,}")
+    print(f"   ✓ Trainable parameters: {trainable_params:,}")
 
-    print("\n[7/10] Configurando optimización...")
+    print("\n[7/10] Configuring optimisation...")
     y_train = np.array([ds[i][3].item() for i in train_idx], dtype=int)
     pos_w = compute_pos_weight_from_labels(y_train)
     criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(pos_w, dtype=torch.float32, device=device))
@@ -529,7 +529,7 @@ def main():
     
     train_losses, val_losses, val_f1s = [], [], []
     
-    print("\n[8/10] COMENZANDO ENTRENAMIENTO")
+    print("\n[8/10] STARTING TRAINING")
     print("="*80)
     start=time.time()
 
@@ -595,21 +595,21 @@ def main():
             best_val = val_loss
             trigger = 0
             torch.save(model.state_dict(), best_path)
-            print(f"    ✓ Nuevo mejor modelo! (val_loss: {best_val:.4f})", flush=True)
+            print(f"    ✓ New best model! (val_loss: {best_val:.4f})", flush=True)
         else:
             trigger += 1
-            print(f"    ⚠ No mejora: {trigger}/{patience}", flush=True)
+            print(f"    ⚠ No improvement: {trigger}/{patience}", flush=True)
             if trigger >= patience:
-                print(f"\n>>> EARLY STOPPING en epoch {epoch}", flush=True)
+                print(f"\n>>> EARLY STOPPING at epoch {epoch}", flush=True)
                 break
 
     train_time = time.time()-start
-    print(f"\n[9/10] Entrenamiento completado en {train_time:.2f}s ({train_time/60:.2f} min)")
+    print(f"\n[9/10] Training completed in {train_time:.2f}s ({train_time/60:.2f} min)")
 
     save_training_curves(train_losses, val_losses, val_f1s, cfg['output_dir'])
-    print(f"   ✓ Curvas de entrenamiento guardadas")
+    print(f"   ✓ Training curves saved")
 
-    print("\n[10/10] Evaluación en test set y Generación de Plots...")
+    print("\n[10/10] Test set evaluation and plot generation...")
     try:
         state = torch.load(best_path, map_location=device, weights_only=True)
         model.load_state_dict(state)
@@ -626,7 +626,7 @@ def main():
             v_probs.extend(torch.sigmoid(out["logits"].view(-1)).cpu().numpy().tolist())
             v_labels.extend(y.view(-1).cpu().numpy().tolist())
     final_thr = best_threshold_from_probs(np.array(v_probs), np.array(v_labels))
-    print(f"   ✓ Mejor umbral (val): {final_thr:.3f}")
+    print(f"   ✓ Best threshold (val): {final_thr:.3f}")
 
     # Inferencia en TEST + Captura de PESOS
     probs_t, labels_t = [], []
@@ -641,11 +641,11 @@ def main():
             # Guardar pesos del batch
             test_weights_list.append(out["fusion_weights"].cpu().numpy())
     
-    # Concatenar pesos de todos los batches
+    # Concatenate weights from all batches
     all_test_weights = np.concatenate(test_weights_list, axis=0)
-    
-    # Generar y guardar los nuevos plots (Violin y Ternary)
-    print("   Generando gráficos de pesos de fusión...")
+
+    # Generate fusion weight distribution plots
+    print("   Generating fusion weight plots...")
     plot_fusion_weights_violin(all_test_weights, cfg['output_dir'])
     plot_fusion_weights_ternary(all_test_weights, cfg['output_dir'])
 
@@ -665,8 +665,8 @@ def main():
         f.write("\nClassification Report (test):\n")
         f.write(rep_test)
     
-    print(f"\n✓ Resultados guardados en: {cfg['output_dir']}")
-    print("✓ PROCESO COMPLETADO EXITOSAMENTE\n")
+    print(f"\n✓ Results saved to: {cfg['output_dir']}")
+    print("✓ PROCESS COMPLETED SUCCESSFULLY\n")
 
 if __name__ == "__main__":
     main()

@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch_geometric.nn import MessagePassing, global_mean_pool
 import torch_geometric.utils
 
-# --- Módulo de EGAT para actualización de nodos (versión de cabeza única) ---
+# --- EGAT single-head convolution module for node updates ---
 class EGATConvSingleHead(MessagePassing):
     def __init__(self, in_channels, out_channels, num_edge_features, dropout=0.6, negative_slope=0.2):
         super(EGATConvSingleHead, self).__init__(aggr='add')
@@ -13,14 +13,14 @@ class EGATConvSingleHead(MessagePassing):
         self.dropout = dropout
         self.negative_slope = negative_slope
 
-        # Dividir la salida en dos partes: para nodos (FH) y para aristas (FE)
-        self.FH = out_channels // 2       # por ejemplo, si out_channels=128, FH=64
-        self.FE = out_channels - self.FH    # en ese caso, FE=64
+        # Split output into node part (FH) and edge part (FE)
+        self.FH = out_channels // 2       # e.g. if out_channels=128, FH=64
+        self.FE = out_channels - self.FH    # FE=64
 
         self.node_lin = nn.Linear(in_channels, self.FH, bias=False)
         self.edge_lin = nn.Linear(num_edge_features, self.FE, bias=False)
 
-        # Parámetro de atención: vector de dimensión (2*FH + FE)
+        # Attention parameter vector of dimension (2*FH + FE)
         self.att = nn.Parameter(torch.Tensor(2 * self.FH + self.FE))
         self.leaky_relu = nn.LeakyReLU(self.negative_slope)
 
@@ -37,7 +37,7 @@ class EGATConvSingleHead(MessagePassing):
         return out  # [N, FH+FE]
 
     def message(self, x_i, x_j, edge_attr, index, ptr, size_i):
-        # x_i, x_j: [E, FH] y edge_attr: [E, FE]
+        # x_i, x_j: [E, FH]; edge_attr: [E, FE]
         cat = torch.cat([x_i, x_j, edge_attr], dim=-1)  # [E, 2*FH + FE]
         alpha = self.leaky_relu((cat * self.att).sum(dim=-1))  # [E]
         alpha = torch_geometric.utils.softmax(alpha, index)
@@ -48,16 +48,15 @@ class EGATConvSingleHead(MessagePassing):
     def update(self, aggr_out):
         return aggr_out
 
-# --- Capa EGAT iterativa (actualiza nodos y aristas) ---
+# --- Iterative EGAT layer (updates both nodes and edges) ---
 class EGATLayer(nn.Module):
     def __init__(self, in_node_dim, in_edge_dim, out_dim, dropout_rate=0.6):
         """
-        Se asume que la salida de la capa tendrá dimensión out_dim para nodos
-        y que las aristas se actualizarán a la misma dimensión.
+        Output dimension is out_dim for nodes; edges are updated to the same dimension.
         """
         super(EGATLayer, self).__init__()
         self.node_conv = EGATConvSingleHead(in_node_dim, out_dim, in_edge_dim, dropout=dropout_rate)
-        # Actualización de aristas mediante MLP: se usan las características del nodo fuente, destino y la arista
+        # Edge update MLP: concatenates source node, destination node, and edge features
         self.edge_update = nn.Sequential(
             nn.Linear(in_node_dim * 2 + in_edge_dim, out_dim),
             nn.ReLU()
@@ -72,33 +71,33 @@ class EGATLayer(nn.Module):
         edge_new = self.edge_update(edge_input)  # [E, out_dim]
         return x_new, edge_new
 
-# --- Modelo EGAT con fusión multi-escala ---
+# --- EGAT model with multi-scale fusion ---
 class EGAT(nn.Module):
     def __init__(self, num_node_features, num_edge_features, model_params):
         """
-        model_params debe incluir:
-          - hidden_dim: dimensión interna para nodos (por ejemplo, 128)
-          - edge_dim: dimensión interna para aristas (se recomienda igual a hidden_dim)
-          - num_layers: número de capas EGAT iterativas (por ejemplo, 2)
-          - dropout_rate: tasa de dropout (por ejemplo, 0.6)
+        model_params must include:
+          - hidden_dim: internal node dimension (e.g. 128)
+          - edge_dim: internal edge dimension (recommended equal to hidden_dim)
+          - num_layers: number of iterative EGAT layers (e.g. 2)
+          - dropout_rate: dropout probability (e.g. 0.6)
         """
         super(EGAT, self).__init__()
         hidden_dim = model_params.get('hidden_dim', 128)
-        # Cambiamos el default para edge_dim a hidden_dim (en lugar de hidden_dim//2)
+        # Default edge_dim to hidden_dim
         edge_dim = model_params.get('edge_dim', hidden_dim)
         num_layers = model_params.get('num_layers', 2)
         dropout_rate = model_params.get('dropout_rate', 0.6)
 
-        # Proyección inicial (bottleneck) para nodos y aristas.
+        # Initial bottleneck projection for nodes and edges
         self.node_proj = nn.Linear(num_node_features, hidden_dim)
         self.edge_proj = nn.Linear(num_edge_features, edge_dim)
-        
-        # Crear las capas EGAT iterativas.
+
+        # Iterative EGAT layers
         self.layers = nn.ModuleList()
         for _ in range(num_layers):
             self.layers.append(EGATLayer(hidden_dim, edge_dim, hidden_dim, dropout_rate))
-        
-        # Fusión multi-escala: concatenamos la proyección inicial y la salida de cada capa.
+
+        # Multi-scale fusion: concatenate initial projection and output of each layer
         self.merge = nn.Sequential(
             nn.Linear((num_layers + 1) * hidden_dim, hidden_dim),
             nn.ReLU()
@@ -108,25 +107,24 @@ class EGAT(nn.Module):
         self.elu = nn.ELU()
 
     def forward(self, x, edge_index, edge_attr, batch):
-        # Proyección inicial
+        # Initial projection
         x = self.node_proj(x)  # [N, hidden_dim]
         edge_attr = self.edge_proj(edge_attr)  # [E, edge_dim]
-        
-        # Almacenamos la proyección inicial (escala 0)
+
+        # Store initial projection (scale 0)
         multi_scale = [x]
-        
-        # Aplicamos las capas iterativas EGAT
+
+        # Apply iterative EGAT layers
         for layer in self.layers:
             x, edge_attr = layer(x, edge_index, edge_attr)
             multi_scale.append(x)
-        
-        # Fusión multi-escala: concatenamos todas las representaciones de nodos
+
+        # Multi-scale fusion: concatenate all node representations
         x_cat = torch.cat(multi_scale, dim=1)  # [N, (num_layers+1)*hidden_dim]
         x_merge = self.merge(x_cat)            # [N, hidden_dim]
         x_merge = self.dropout(self.elu(x_merge))
-        
-        # Pooling global para obtener la representación del grafo
+
+        # Global pooling to obtain graph-level representation
         x_pool = global_mean_pool(x_merge, batch)
         out = self.final_linear(x_pool)
         return out
-

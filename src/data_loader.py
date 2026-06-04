@@ -7,7 +7,7 @@ from sklearn.model_selection import GroupShuffleSplit
 from sklearn.preprocessing import StandardScaler
 import torch
 
-# ------- Semillas y paths -------
+# ------- Seeds and paths -------
 def set_seed(seed: int = 42):
     random.seed(seed)
     np.random.seed(seed)
@@ -20,7 +20,7 @@ def set_seed(seed: int = 42):
 def ensure_dir(path: str):
     os.makedirs(path, exist_ok=True)
 
-# ------- Splits por grupo (matrícula) -------
+# ------- Group-based splits (by plate number) -------
 def group_split_indices(groups, test_size=0.2, val_size=0.1, seed=42):
     gss1 = GroupShuffleSplit(n_splits=1, test_size=test_size, random_state=seed)
     all_idx = np.arange(len(groups))
@@ -35,25 +35,25 @@ def compute_pos_weight_from_labels(labels: np.ndarray) -> float:
     n_neg = (labels == 0).sum()
     return float(n_neg) / max(1.0, float(n_pos))
 
-# ------- Lectura y etiqueta -------
+# ------- Reading and labelling -------
 def load_df(csv_path: str, target_col: str = "repeater"):
     df = pd.read_csv(csv_path, low_memory=False)
     if target_col not in df.columns:
-        raise ValueError(f"El archivo {csv_path} no contiene la columna '{target_col}'")
-    # castea etiqueta a {0,1}
+        raise ValueError(f"File {csv_path} does not contain column '{target_col}'")
+    # Cast label to {0, 1}
     df["label"] = df[target_col].apply(lambda x: 1 if str(x).lower() in ("1", "true", "t", "yes", "y") else 0).astype(int)
-    # normaliza fechas si existen
+    # Normalise date columns if present
     for c in ("entry_date", "exit_date"):
         if c in df.columns:
             df[c] = pd.to_datetime(df[c], errors="coerce")
-    # grupo por matrícula si existe; si no, usa índices
+    # Group by plate number if available; otherwise use row indices
     if "num_plate" in df.columns:
         groups = df["num_plate"].values
     else:
         groups = np.arange(len(df))
     return df, groups
 
-# ------- Tabular: escalado sin fuga -------
+# ------- Tabular: leak-free scaling -------
 def build_tabular_tensors(df: pd.DataFrame, features: list, train_idx, val_idx, test_idx):
     X = df[features].copy()
     for col in features:
@@ -79,7 +79,7 @@ def build_tabular_tensors(df: pd.DataFrame, features: list, train_idx, val_idx, 
         scaler
     )
 
-# ------- GNN: construcción de grafos PyG -------
+# ------- GNN: PyG graph construction -------
 def _parse_list_cell(s):
     if pd.isna(s): return []
     if isinstance(s, list): return s
@@ -93,10 +93,10 @@ def _parse_list_cell(s):
 
 def build_graph_list(df: pd.DataFrame):
     """
-    Requiere columnas: route (lista), times (lista), directions (lista).
-    Crea: lista de (x, edge_index, edge_attr, y) para PyG.
+    Requires columns: route (list), times (list), directions (list).
+    Returns: list of (x, edge_index, edge_attr, y) PyG Data objects.
     """
-    # mapeo de nodos
+    # Build node mapping
     node_set = set()
     for route_str in df["route"]:
         route = _parse_list_cell(route_str)
@@ -122,13 +122,13 @@ def build_graph_list(df: pd.DataFrame):
             graphs.append(Data(x=x, edge_index=edge_index, edge_attr=edge_attr, y=y))
             continue
 
-        # ajusta longitudes si vienen desalineadas
+        # Align lengths if mismatched
         if len(times) != max(0, len(route)-1):
             times = times[:max(0, len(route)-1)]
         if len(directions) != len(route):
             directions = directions[:len(route)] + [0]*(len(route)-len(directions))
 
-        # edge_index y edge_attr (z-score por visita)
+        # edge_index and edge_attr (z-score per visit)
         edges = [[i, i+1] for i in range(max(0, len(route)-1))]
         if edges:
             edge_index = torch.tensor(edges, dtype=torch.long).t().contiguous()
@@ -140,7 +140,7 @@ def build_graph_list(df: pd.DataFrame):
             edge_index = torch.empty((2, 0), dtype=torch.long)
             edge_attr  = torch.empty((0, 1), dtype=torch.float32)
 
-        # nodos: one-hot de tipo + dirección
+        # Node features: one-hot type + direction
         node_type = torch.zeros((len(route), num_unique_nodes), dtype=torch.float32)
         dir_feat  = torch.zeros((len(route), 1), dtype=torch.float32)
         for i, node in enumerate(route):
@@ -155,4 +155,3 @@ def build_graph_list(df: pd.DataFrame):
     num_node_features = num_unique_nodes + 1
     num_edge_features = 1
     return graphs, num_node_features, num_edge_features
-
