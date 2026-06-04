@@ -1,0 +1,62 @@
+seed: 42
+
+csv_paths:
+  graphs: "./own_db/try2/6months.csv"
+  tabular: "./own_db/try2/vehicles.csv"
+  temporal: "./own_db/try2/temporal_daily.csv"
+
+target: "repeater"
+
+tabular_features:
+  - total_distance
+  - visit_time
+  - nights
+  - entry_day_of_week
+  - exit_day_of_week
+  - entry_is_weekend
+  - exit_is_weekend
+  - entry_is_holiday
+  - exit_is_holiday
+  - entry_is_high_season
+  - exit_is_high_season
+  - entry_hour
+  - exit_hour
+
+# --- PARÁMETROS "HIGH CAPACITY" ---
+gnn_model_params:
+  hidden_dim: 128       # Potencia gráfica
+  edge_dim: 128
+  num_layers: 2
+  dropout_rate: 0.1     # Mínimo dropout para aprender detalles
+
+tab_model_params:
+  hidden_dim: 128       # Potencia tabular
+  d_model: 128
+  dropout: 0.1
+  n_heads: 8            # 8 cabezas de atención
+  n_layers: 2
+  dim_ff: 256           # Feed Forward denso
+  use_cls: true
+
+temporal_params:
+  window: 28
+
+fusion_params:
+  fusion_dim: 128       # Espacio de fusión amplio
+  temporal_hidden: 128
+  temporal_bidirectional: true
+  temporal_dropout: 0.1
+  tau: 1.0
+  mu_aux: 0.3
+  mu_unc: 0.1
+  mu_gate: 0.05
+
+training_params:
+  epochs: 100
+  learning_rate: 0.0001
+  batch_size: 128
+  patience: 15
+  test_size: 0.2
+  val_size: 0.1
+
+output_dir: "results/gcva_best"
