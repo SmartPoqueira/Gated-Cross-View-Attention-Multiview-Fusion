@@ -12,16 +12,16 @@ An **uncertainty-aware multiview fusion mechanism** that dynamically weights het
 In real-world IoT systems, data arrives from multiple sources with different noise levels. Naively fusing them degrades performance when one view is unreliable. GCVA addresses this by:
 
 1. **Independent view encoding** — EGAT for graph routes, TabularTransformer for contextual features, LSTM for temporal signals.
-2. **Uncertainty estimation per view** — A learned head estimates aleatoric variance σ²_v; confidence is γ_v = −log(σ²_v).
-3. **Confidence-aware gating** — Each view receives a scalar gate g_v = σ(W_g·[h_v; γ_v]) ∈ (0,1) based on both its embedding and its confidence.
-4. **Gated cross-attention** — Attention scores between views are modulated by the product of their gates: A_ij = (Q_i K_j^T) · g_i · g_j, applied **before** softmax.
-5. **Weighted fusion** — Final representation is a softmax-weighted sum of attended view embeddings, again weighted by g_v.
+2. **Uncertainty estimation per view** — A learned head estimates aleatoric variance $\sigma^2_v$; confidence is $\gamma_v = -\log(\sigma^2_v)$.
+3. **Confidence-aware gating** — Each view receives a scalar gate $g_v = \sigma(W_g \cdot [h_v; \gamma_v]) \in (0,1)$ based on both its embedding and its confidence.
+4. **Gated cross-attention** — Attention scores between views are modulated by the product of their gates: $A_{ij} = (Q_i K_j^T) \cdot g_i \cdot g_j$, applied **before** softmax.
+5. **Weighted fusion** — Final representation is a softmax-weighted sum of attended view embeddings, again weighted by $g_v$.
 
 <p align="center">
   <img src="images/architecture.png" width="750"/>
 </p>
 
-*GCVA fusion mechanism. Each view's uncertainty σ²_v is estimated first; reliability gates g_v then modulate cross-view attention scores and the final weighted fusion.*
+*GCVA fusion mechanism. Each view's uncertainty $\sigma^2_v$ is estimated first; reliability gates $g_v$ then modulate cross-view attention scores and the final weighted fusion.*
 
 ---
 
@@ -31,18 +31,16 @@ The GCVA model implements four stages (paper Section III):
 
 | Stage | Equation | Purpose |
 |---|---|---|
-| 1. Uncertainty | `σ²_v = softplus(f_unc(h_v)) + ε` | Estimate aleatoric noise per view |
-| 2. Gating | `g_v = σ(f_gate([h_v ; γ_v]))` | Scalar trust score ∈ (0,1) |
-| 3. Cross-Attention | `A_ij = (Q_i K_j^T) · g_i · g_j` before softmax | Gated inter-view information exchange |
-| 4. Fusion | `z = Σ_v ω_v · h̃_v`, `ω = softmax(g)` | Reliability-weighted combination |
+| 1. Uncertainty | $\sigma^2_v = \text{softplus}(f_{\text{unc}}(h_v)) + \epsilon$ | Estimate aleatoric noise per view |
+| 2. Gating | $g_v = \sigma(f_{\text{gate}}([h_v ; \gamma_v]))$ | Scalar trust score $\in (0,1)$ |
+| 3. Cross-Attention | $A_{ij} = (Q_i K_j^T) \cdot g_i \cdot g_j$ before softmax | Gated inter-view information exchange |
+| 4. Fusion | $z = \sum_v \omega_v \cdot \tilde{h}_v$, $\omega = \text{softmax}(g)$ | Reliability-weighted combination |
 
 **Composite loss** (paper Eq. 7):
 
-```math
-\mathcal{L} = \mathcal{L}_{\text{main}} + \lambda_1 \mathcal{L}_{\text{unc}} + \lambda_2 \mathcal{L}_{\text{gate}}
-```
+$$\mathcal{L} = \mathcal{L}_{\text{main}} + \lambda_1 \mathcal{L}_{\text{unc}} + \lambda_2 \mathcal{L}_{\text{gate}}$$
 
-where λ₁ = 0.50 and λ₂ = 0.25 (selected via sensitivity analysis).
+where $\lambda_1 = 0.50$ and $\lambda_2 = 0.25$ (selected via sensitivity analysis).
 
 ---
 
