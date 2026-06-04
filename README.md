@@ -69,11 +69,12 @@ python -m src.model --config configs/config.yaml
 ## Citation
 
 ```bibtex
-@article{duranlopez2025gcva,
-  title={Gated Cross-View Attention: Uncertainty-Aware Multiview Fusion for Heterogeneous IoT Data},
-  author={Dur{\'a}n-L{\'o}pez, Alberto and Bola{\~n}os-Mart{\'i}nez, Daniel and Berm{\'u}dez-Edo, Mar{\'i}a},
-  journal={<Journal Name>},
-  year={2025}
+@article{duran2026gcva,
+  title={GCVA: A Multiview Fusion Mechanism for Heterogeneous Data Representations},
+  author={Dur{\'a}n-L{\'O}pez, Alberto and Bola{\~n}os-Martinez, Daniel and Bermudez-Edo, Maria},
+  journal={IEEE Internet of Things Journal},
+  year={2026},
+  publisher={IEEE}
 }
 ```
 
