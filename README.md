@@ -13,7 +13,7 @@ In real-world IoT systems, data arrives from multiple heterogeneous sources with
 
 
 <p align="center">
-  <img src="images/architecture.png" width="750"/>
+  <img src="paper/figures/gcva_updated.png" width="750"/>
 </p>
 
 *GCVA fusion mechanism. The model processes heterogeneous input views by first estimating their individual uncertainty (σ²) via the Confidence-Aware Gating Mechanism. These estimates generate reliability gates (g_v) that dynamically modulate attention scores, lowering the contribution of noisy views before the final weighted fusion.*
@@ -45,7 +45,7 @@ Binary classification (repeater vs. non-repeater) on IoT vehicle data:
 | **GCVA (Ours)** | **0.81** | **0.78** | **0.79** | **0.87** |
 
 <p align="center">
-  <img src="images/results.png" width="700"/>
+  <img src="paper/figures/final_plot_vertical_aligned.png" width="700"/>
 </p>
 
 *Weighted F1-score distributions for different fusion strategies and view combinations using 5-fold cross-validation.*
@@ -53,7 +53,7 @@ Binary classification (repeater vs. non-repeater) on IoT vehicle data:
 ### Gate Correlation Analysis
 
 <p align="center">
-  <img src="images/gate_correlation.png" width="700"/>
+  <img src="paper/figures/gcva_gate_correlation_new.png" width="700"/>
 </p>
 
 *Correlation between learned gate values (g_v) and view prediction errors — confirming that the gating mechanism correctly suppresses less reliable views.*
@@ -61,7 +61,7 @@ Binary classification (repeater vs. non-repeater) on IoT vehicle data:
 ### Sensitivity Analysis
 
 <p align="center">
-  <img src="images/sensitivity.png" width="700"/>
+  <img src="paper/figures/gcva_sensitivity_heatmap_asymmetric.png" width="700"/>
 </p>
 
 *Sensitivity analysis of GCVA loss hyperparameters (λ₁ and λ₂).*
